@@ -1,3 +1,6 @@
+print("[EmotesDark] loadstring iniciou o arquivo")
+warn("[EmotesDark] loadstring iniciou o arquivo")
+
 --[[ 
     Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
 
@@ -384,15 +387,10 @@ end
 -- Um único caminho de envio; não usa RemoteEvent e não duplica o log.
 sendCompleteStartupLog()
 
+-- Permite reiniciar pelo loadstring sem ficar preso numa execução anterior.
 if _G.EmotesGUIRunning then
-    emotesDarkNotify({
-        Title = 'Dark | Emote',
-        Content = '⚠️ It works It actually works',
-        Duration = 5
-    })
-    return
+    warn("[EmotesDark] Reiniciando uma execução anterior.")
 end
-
 _G.EmotesGUIRunning = true
 
 offsaleAnimationJson = true
@@ -1919,6 +1917,8 @@ end)
 
 SettingsLib = SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/Settings.lua", "Settings Library")
 if type(SettingsLib) ~= "table" or type(SettingsLib.CreateTab) ~= "function" then
+    _G.EmotesGUIRunning = nil
+    warn("[EmotesDark] Settings Library não carregou; tente novamente após liberar HTTP.")
     emotesDarkNotify({ Title = "Dark | Error", Content = "Settings Library could not be loaded. Check the executor network permission.", Duration = 8 })
     return
 end
