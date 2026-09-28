@@ -31,14 +31,18 @@ end
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local nexusModel = ReplicatedStorage:WaitForChild("NexusVRCharacterModel", 5)
-if not nexusModel then
-    return
-end
+-- O servidor pode criar esses objetos depois que o jogo termina de carregar.
+-- Não encerramos o script silenciosamente se eles não aparecerem.
+local nexusModel = ReplicatedStorage:WaitForChild("NexusVRCharacterModel", 30)
+local remote = nexusModel and nexusModel:WaitForChild("UpdateInputs", 30)
 
-local remote = nexusModel:WaitForChild("UpdateInputs", 5)
-if not remote then
-    return
+if not nexusModel then
+    warn("[NexusVR] NexusVRCharacterModel não encontrado no ReplicatedStorage após 30s.")
+elseif not remote then
+    warn("[NexusVR] UpdateInputs não encontrado dentro do NexusVRCharacterModel após 30s.")
+elseif not remote:IsA("RemoteEvent") then
+    warn("[NexusVR] UpdateInputs existe, mas não é um RemoteEvent.")
+    remote = nil
 end
 local cam = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
@@ -48,7 +52,7 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 
 -- Notificar servidor que está pronto
-local replicationReady = nexusModel:FindFirstChild("ReplicationReady")
+local replicationReady = nexusModel and nexusModel:FindFirstChild("ReplicationReady")
 if replicationReady and replicationReady:IsA("RemoteEvent") then
     replicationReady:FireServer()
 end
@@ -74,7 +78,7 @@ local rightHandCF = CFrame.new()
 -- Sistema de GUI seguro
 local ParentGui
 local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
-if gethui then
+if typeof(gethui) == "function" then
     ParentGui = gethui()
 elseif success and coreGui and coreGui:FindFirstChild("RobloxGui") then
     ParentGui = coreGui:FindFirstChild("RobloxGui")
@@ -317,7 +321,7 @@ task.spawn(function()
     TweenService:Create(TextoIntro, TweenInfo.new(1), {TextTransparency=1}):Play()
     TweenService:Create(Traco, TweenInfo.new(1), {Transparency=1}):Play()
     TweenService:Create(Intro, TweenInfo.new(1), {BackgroundTransparency=1}):Play()
-    Intro.Destroying:Wait()
+    Intro:Destroy()
     for _,nome in next,{"Esquerdo_Painel","Esquerdo_Z_Painel","Direito_Painel","Direito_Z_Painel"} do
         local p = ScreenGui:FindFirstChild(nome)
         if p then p.Visible = true end
@@ -375,7 +379,9 @@ RunService.RenderStepped:Connect(function()
     -- Enviar dados ao servidor
     local agora = os.clock()
     if agora - tAnterior >= TASA_ENVIO then
-        remote:FireServer(headCF, leftHandCF, rightHandCF)
+        if remote then
+            remote:FireServer(headCF, leftHandCF, rightHandCF)
+        end
         tAnterior = agora
     end
 end)
