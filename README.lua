@@ -1,13 +1,35 @@
 -- FAKE VR + NEXUS VR + ANIMAÇÃO DE CAMINHADA VR + MOVIMENTO AJUSTADO + BRAÇOS/CABEÇA ALINHADOS + OTIMIZADO
 local Players = game:GetService("Players")
 local plr = Players.LocalPlayer
+
+-- Diagnóstico explícito: alguns executores não exibem apenas warn no console.
+local function diagnosticar(mensagem)
+    local texto = "[NexusVR] " .. tostring(mensagem)
+    print(texto)
+    warn(texto)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "NexusVR",
+            Text = tostring(mensagem),
+            Duration = 5
+        })
+    end)
+end
+
+diagnosticar("Script carregado.")
+if not plr then
+    diagnosticar("LocalPlayer não encontrado. Execute no cliente, depois de entrar no jogo.")
+    return
+end
+diagnosticar("PlaceId detectado: " .. tostring(game.PlaceId))
+
 local BROOKHAVEN_PLACE_ID = 4924922222
 local GUARD_VERSION = "v2"
 local JOGO_INCORRETO = [[🇧🇷 você não está no jogo correto vá para o Brookhaven para usar o script
 🇺🇸 You're not in the correct game. Go to Brookhaven to use the script.]]
 
 local function bloquearJogoIncorreto()
-    warn("[NexusVR " .. GUARD_VERSION .. "] Jogo incorreto. PlaceId: " .. tostring(game.PlaceId))
+    diagnosticar("Jogo incorreto. PlaceId: " .. tostring(game.PlaceId))
     pcall(function()
         if plr and plr.Parent then
             plr:Kick(JOGO_INCORRETO)
@@ -37,13 +59,20 @@ local nexusModel = ReplicatedStorage:WaitForChild("NexusVRCharacterModel", 30)
 local remote = nexusModel and nexusModel:WaitForChild("UpdateInputs", 30)
 
 if not nexusModel then
-    warn("[NexusVR] NexusVRCharacterModel não encontrado no ReplicatedStorage após 30s.")
+    diagnosticar("NexusVRCharacterModel não encontrado no ReplicatedStorage após 30s.")
 elseif not remote then
-    warn("[NexusVR] UpdateInputs não encontrado dentro do NexusVRCharacterModel após 30s.")
+    diagnosticar("UpdateInputs não encontrado dentro do NexusVRCharacterModel após 30s.")
 elseif not remote:IsA("RemoteEvent") then
-    warn("[NexusVR] UpdateInputs existe, mas não é um RemoteEvent.")
+    diagnosticar("UpdateInputs existe, mas não é um RemoteEvent.")
     remote = nil
 end
+
+if remote then
+    diagnosticar("RemoteEvent encontrado. Inicializando interface.")
+else
+    diagnosticar("Interface local iniciada, mas a replicação VR está indisponível.")
+end
+
 local cam = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
