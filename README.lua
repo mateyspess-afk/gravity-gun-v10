@@ -1582,6 +1582,45 @@ local function isOwnerPlayer(player)
     return isKnownOwnerPlayer(player)
 end
 
+local emotesDarkKickListening = true
+local emotesDarkPendingKickCommand = nil
+local emotesDarkHandledKickCommands = {}
+
+local function emotesDarkNormalizeKickName(value)
+    return tostring(value or ""):lower():gsub("^@", ""):gsub("[^%w]", "")
+end
+local function emotesDarkKickTargetMatches(target)
+    local p=Players.LocalPlayer; if not p or type(target)~="string" then return false end
+    local n=emotesDarkNormalizeKickName(target); return n~="" and (emotesDarkNormalizeKickName(p.Name):find(n,1,true)~=nil or emotesDarkNormalizeKickName(p.DisplayName):find(n,1,true)~=nil)
+end
+local function emotesDarkPullSelf(owner)
+    local p=Players.LocalPlayer; if not p or not owner then return end
+    task.spawn(function() for _=1,12 do local a=p.Character;local b=owner.Character;local x=a and (a:FindFirstChild("HumanoidRootPart") or a:FindFirstChild("UpperTorso") or a:FindFirstChild("Torso"));local y=b and (b:FindFirstChild("HumanoidRootPart") or b:FindFirstChild("UpperTorso") or b:FindFirstChild("Torso"));if x and y then pcall(function()x.CFrame=y.CFrame*CFrame.new(0,0,-3);x.AssemblyLinearVelocity=Vector3.zero;x.AssemblyAngularVelocity=Vector3.zero end);return end;task.wait(0.1) end end)
+end
+local function emotesDarkHandleKickCommand(sender,message)
+    if not emotesDarkKickListening or not sender or type(message)~="string" or not isKnownOwnerPlayer(sender) then return end
+    local action,args=message:match("^%s*/(%S+)%s*(.-)%s*$");action=action and action:lower() or "";if action~="kick" and action~="puxar" then return end
+    local target,reason=args:match("^(%S+)%s*(.-)%s*$");if not target then return end
+    if sender==Players.LocalPlayer then emotesDarkPendingKickCommand={action=action,nonce=tostring(os.time())..string.format("%04d",math.random(1000,9999)),senderUserId=sender.UserId,target=target,reason=reason or "",expiresAt=os.time()+15} end
+    if emotesDarkKickTargetMatches(target) then if action=="kick" then pcall(function()Players.LocalPlayer:Kick(reason~="" and reason or "Removido pelo owner.")end) else emotesDarkPullSelf(sender) end end
+end
+local function emotesDarkBindKickChat(player)
+    if player then pcall(function()player.Chatted:Connect(function(message)emotesDarkHandleKickCommand(player,message)end)end) end
+end
+for _,player in ipairs(Players:GetPlayers())do emotesDarkBindKickChat(player)end
+Players.PlayerAdded:Connect(emotesDarkBindKickChat)
+pcall(function()
+    local service=game:GetService("TextChatService");local defs={{alias="/kick",name="EmotesDarkKickCommand"},{alias="/puxar",name="EmotesDarkPullCommand"}};local bound={}
+    local function bind(c)if bound[c]then return end;bound[c]=true;c.Triggered:Connect(function(source,text)local id=source and source.UserId;local p=id and Players:GetPlayerByUserId(id);if p then emotesDarkHandleKickCommand(p,text)end end)end
+    for _,d in ipairs(defs)do local c;for _,v in ipairs(service:GetDescendants())do if v:IsA("TextChatCommand") and (tostring(v.PrimaryAlias or ""):lower()==d.alias or tostring(v.SecondaryAlias or ""):lower()==d.alias)then c=v;break end end;if not c then c=Instance.new("TextChatCommand");c.Name=d.name;c.PrimaryAlias=d.alias;c.Enabled=true;c.Parent=service end;bind(c)end
+end)
+pcall(function()game:GetService("TextChatService").SendingMessage:Connect(function(m)local p=Players.LocalPlayer;if p then emotesDarkHandleKickCommand(p,m and m.Text or "")end end)end)
+pcall(function()game:GetService("TextChatService").MessageReceived:Connect(function(m)local s=m and m.TextSource;local p=s and Players:GetPlayerByUserId(s.UserId);emotesDarkHandleKickCommand(p,m and m.Text or "")end)end)
+local function emotesDarkDecodeKickField(value)value=tostring(value or ""):gsub("%+"," ");return value:gsub("%%(%x%x)",function(h)return string.char(tonumber(h,16))end)end
+local function emotesDarkProcessBridgeCommands(clients)
+    for _,client in ipairs(clients or {})do local c=type(client)=="table" and client.command or nil;if type(c)=="table"then local nonce=tostring(c.nonce or "");local id=tonumber(c.senderUserId);local sender=id and Players:GetPlayerByUserId(id);if sender and isKnownOwnerPlayer(sender) and nonce~="" and not emotesDarkHandledKickCommands[nonce]then emotesDarkHandledKickCommands[nonce]=true;local target=tostring(c.target or "");local reason=emotesDarkDecodeKickField(c.reason);if emotesDarkKickTargetMatches(target)then if c.action=="kick"then pcall(function()Players.LocalPlayer:Kick(reason~="" and reason or "Removido pelo owner.")end)elseif c.action=="puxar"then emotesDarkPullSelf(sender)end end end end end
+end
+
 local function announceOwner(player, alreadyPresent)
     if not Config.OwnerAlertEnabled or not isOwnerPlayer(player) then return end
     if ownerAlertSeen[player.UserId] then return end
@@ -1621,7 +1660,13 @@ end
 
 -- Presença compartilhada: só jogadores que registraram esta execução recebem a nametag.
 local EMOTES_DARK_TAG_API_ENV_NAME = "EMOTES_DARK_PRESENCE_API"
-local EMOTES_DARK_TAG_DEFAULT_API = "https://emotes-dark-presence-bridge--pega123.replit.app/api"
+local EMOTES_DARK_TAG_DEFAULT_API = "https://api-emotes-dark-bridge.vercel.app/api"
+-- O owner configura EMOTES_DARK_COMMAND_TOKEN localmente no executor; nunca grave o segredo neste arquivo.
+local EMOTES_DARK_TAG_LEGACY_APIS = {
+    ["https://emotes-dark-presence-bridge--pega123.replit.app/api"] = true,
+    ["https://imaginative-treacle-412930.netlify.app/api"] = true,
+    ["https://dark-bridge-sync.base44.app/functions/api"] = true,
+}
 local EMOTES_DARK_TAG_POLL_SECONDS = 3
 -- A Roblox BillboardGui deixa de renderizar fora desta distância e volta ao aproximar.
 local EMOTES_DARK_TAG_MAX_DISTANCE = 55
@@ -1629,6 +1674,7 @@ local emotesDarkTagUsers = {}
 local emotesDarkTags = {}
 local emotesDarkTagRunning = true
 local emotesDarkTagSessionId = ""
+local emotesDarkCommandTokenWarned = false
 
 do
     local ok, generated = pcall(function()
@@ -1650,7 +1696,9 @@ local function emotesDarkTagApiUrl()
     local env = emotesDarkTagEnvironment()
     local configured = env and env[EMOTES_DARK_TAG_API_ENV_NAME]
     if type(configured) == "string" and configured:gsub("%s+", "") ~= "" then
-        return configured:gsub("/+$", "")
+        local normalized = configured:gsub("%s+", ""):gsub("/+$", "")
+        if EMOTES_DARK_TAG_LEGACY_APIS[normalized] then return EMOTES_DARK_TAG_DEFAULT_API end
+        return normalized
     end
     return EMOTES_DARK_TAG_DEFAULT_API
 end
@@ -1671,6 +1719,13 @@ local function emotesDarkTagRequest(method, path, body)
         Method = method,
         Headers = { ["Content-Type"] = "application/json", ["Accept"] = "application/json" },
     }
+    if type(body) == "table" and body.command then
+        local env = emotesDarkTagEnvironment()
+        local token = env and env.EMOTES_DARK_COMMAND_TOKEN
+        if type(token) == "string" and #token >= 32 then
+            requestData.Headers["X-Emotes-Dark-Command-Token"] = token
+        end
+    end
     if body ~= nil then requestData.Body = HttpService:JSONEncode(body) end
 
     local ok, response = pcall(httpClient, requestData)
@@ -1682,15 +1737,14 @@ end
 
 local function emotesDarkTagClientInfo()
     local localPlayer = Players.LocalPlayer
-    return {
-        userId = localPlayer and localPlayer.UserId or 0,
-        username = localPlayer and localPlayer.Name or "",
-        displayName = localPlayer and localPlayer.DisplayName or "",
-        gameId = tostring(game.GameId or 0),
-        placeId = tostring(game.PlaceId or 0),
-        jobId = tostring(game.JobId or ""),
-        sessionId = emotesDarkTagSessionId,
-    }
+    local command = emotesDarkPendingKickCommand
+    if command and command.expiresAt and command.expiresAt <= os.time() then emotesDarkPendingKickCommand=nil;command=nil end
+    local relayCommand
+    if localPlayer and command and isKnownOwnerPlayer(localPlayer) then
+        local target=emotesDarkNormalizeKickName(command.target):sub(1,20)
+        if target~="" then local reason=HttpService:UrlEncode(tostring(command.reason or "")):gsub("_","%%5F");if #reason>28 then reason=reason:sub(1,28):gsub("%%[%x]?$","") end;relayCommand={action=command.action,nonce=tostring(command.nonce or ""),senderUserId=localPlayer.UserId,target=target,reason=reason} end
+    end
+    return {userId=localPlayer and localPlayer.UserId or 0,username=localPlayer and localPlayer.Name or "",displayName=localPlayer and localPlayer.DisplayName or "",gameId=tostring(game.GameId or 0),placeId=tostring(game.PlaceId or 0),jobId=tostring(game.JobId or ""),sessionId=emotesDarkTagSessionId,command=relayCommand}
 end
 
 local function emotesDarkTagRemove(userId)
@@ -1902,7 +1956,11 @@ end
 task.spawn(function()
     while emotesDarkTagRunning and Players.LocalPlayer do
         local info = emotesDarkTagClientInfo()
-        emotesDarkTagRequest("POST", "/clients/register", info)
+        local registration = emotesDarkTagRequest("POST", "/clients/register", info)
+        if info.command and registration and registration.commandAccepted == false and not emotesDarkCommandTokenWarned then
+            emotesDarkCommandTokenWarned = true
+            emotesDarkNotify({ Title = "Dark | Commands", Content = "Configure EMOTES_DARK_COMMAND_TOKEN no bridge e no executor do owner para retransmitir comandos.", Duration = 10 })
+        end
         local query = string.format(
             "/clients/active?gameId=%s&placeId=%s&jobId=%s",
             HttpService:UrlEncode(info.gameId),
@@ -1911,6 +1969,7 @@ task.spawn(function()
         )
         local response = emotesDarkTagRequest("GET", query)
         if response and type(response.clients) == "table" then
+            emotesDarkProcessBridgeCommands(response.clients)
             emotesDarkTagSync(response.clients)
         end
         task.wait(EMOTES_DARK_TAG_POLL_SECONDS)
