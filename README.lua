@@ -41,10 +41,39 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 14)
 corner.Parent = mainFrame
 
+-- Borda roxa animada: o gradiente gira apenas no contorno da janela.
 local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(130, 40, 255)
-stroke.Thickness = 2
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+-- Branco permite que as cores do gradiente apareçam sem escurecimento extra.
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Thickness = 2.5
 stroke.Parent = mainFrame
+
+local borderGradient = Instance.new("UIGradient")
+borderGradient.Name = "AnimatedPurpleBorder"
+borderGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(65, 15, 110)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(100, 25, 180)),
+	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(170, 60, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(235, 190, 255))
+})
+borderGradient.Rotation = 0
+borderGradient.Parent = stroke
+
+-- Uma volta a cada 4 segundos, sem criar uma conexão por frame.
+-- 360 e 0 graus têm a mesma aparência, mantendo o loop contínuo.
+local borderTween = TweenService:Create(
+	borderGradient,
+	TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, false),
+	{Rotation = 360}
+)
+borderTween:Play()
+
+-- Encerra a animação caso a interface seja destruída.
+screenGui.Destroying:Connect(function()
+	borderTween:Cancel()
+	borderTween:Destroy()
+end)
 
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new({
